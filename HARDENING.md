@@ -7,9 +7,16 @@ nginx rather than in application/backend code.
 ## Baseline
 
 The module was reviewed against the stock
-`src/http/modules/ngx_http_image_filter_module.c` from nginx 1.30.2. The
-non-watermark buffer allocation changes that had drifted from stock nginx were
-returned to the nginx 1.30.2 implementation.
+`src/http/modules/ngx_http_image_filter_module.c` from nginx 1.30.2 and
+against current nginx upstream. The non-watermark buffer allocation changes
+that had drifted from stock nginx were returned to the nginx implementation.
+
+The branch also backports nginx upstream commit
+`95a24d1b9cdd89608c601748e2fdfe94fb81e7b3` ("Image filter: fixed reading
+past the received data"). That upstream fix adjusts `ctx->length` to the
+number of bytes actually received when an upstream response has no
+Content-Length, preventing parsers/decoders from treating unused buffer space
+as valid image data.
 
 ## Correctness and crash fixes
 
@@ -81,6 +88,13 @@ Supported positions remain:
 `top-left`, `top-right`, `bottom-right`, `bottom-left`,
 `right-center`, `left-center`, `bottom-center`, `top-center`,
 `center-center`, and `center-random`.
+
+## Compile validation
+
+`.github/workflows/build-nginx-1.30.2.yml` replaces the stock nginx 1.30.2
+image-filter source with this file and compiles nginx with
+`--with-http_image_filter_module`. GitHub Actions may need to be explicitly
+enabled on a newly-created fork before the first run appears.
 
 ## Validation matrix before production
 
