@@ -1088,7 +1088,9 @@ transparent:
         ngx_str_t    watermark_value, position_value;
         gdImagePtr   watermark, watermark_mix, white, white_mix;
         ngx_int_t    min_w, min_h, wdx, wdy;
-        ngx_uint_t   can_apply;
+        ngx_uint_t   can_apply, watermark_applied;
+
+        watermark_applied = 0;
 
         if (ngx_http_complex_value(r, conf->wmcv, &watermark_value)
             != NGX_OK)
@@ -1147,7 +1149,7 @@ transparent:
                 watermark_file = fopen((const char *) watermark_path, "rb");
 
                 if (watermark_file == NULL) {
-                    ngx_log_error(NGX_LOG_ERR, r->connection->log,
+                    ngx_log_error(NGX_LOG_WARN, r->connection->log,
                                   ngx_errno,
                                   "watermark file '%s' could not be opened",
                                   watermark_path);
@@ -1156,7 +1158,7 @@ transparent:
                     watermark = gdImageCreateFromPng(watermark_file);
 
                     if (watermark == NULL) {
-                        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                        ngx_log_error(NGX_LOG_WARN, r->connection->log, 0,
                                       "watermark file '%s' is not a valid PNG",
                                       watermark_path);
 
@@ -1337,6 +1339,7 @@ transparent:
                             gdImageCopyMerge(dst, watermark_mix, wdx, wdy,
                                              0, 0, watermark->sx,
                                              watermark->sy, 75);
+                            watermark_applied = 1;
                         }
 
                         if (white != NULL) {
@@ -1356,7 +1359,11 @@ transparent:
 
                     fclose(watermark_file);
                 }
-            } else if (conf->filter == NGX_HTTP_IMAGE_WATERMARK) {
+            }
+
+            if (conf->filter == NGX_HTTP_IMAGE_WATERMARK
+                && !watermark_applied)
+            {
                 gdImageDestroy(dst);
                 return ngx_http_image_asis(r, ctx);
             }
@@ -1700,6 +1707,13 @@ ngx_http_image_filter_merge_conf(ngx_conf_t *cf, void *parent, void *child)
                          prev->watermark_height_from, 0);
     ngx_conf_merge_value(conf->watermark_width_from,
                          prev->watermark_width_from, 0);
+
+    if (conf->filter == NGX_HTTP_IMAGE_WATERMARK && conf->wmcv == NULL) {
+        ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+                           "\"image_filter watermark\" requires "
+                           "\"image_filter_watermark\"");
+        return NGX_CONF_ERROR;
+    }
 
     return NGX_CONF_OK;
 }
