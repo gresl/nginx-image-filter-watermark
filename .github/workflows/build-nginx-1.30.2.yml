@@ -1,0 +1,47 @@
+name: Build against nginx 1.30.2
+
+on:
+  push:
+    branches:
+      - hardening/nginx-1.30.2
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out watermark source
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            curl \
+            libgd-dev \
+            libpcre2-dev \
+            zlib1g-dev
+
+      - name: Download nginx 1.30.2
+        run: |
+          curl -fsSLO https://nginx.org/download/nginx-1.30.2.tar.gz
+          tar -xzf nginx-1.30.2.tar.gz
+
+      - name: Replace stock image filter module
+        run: |
+          cp ngx_http_image_filter_module.c \
+            nginx-1.30.2/src/http/modules/ngx_http_image_filter_module.c
+
+      - name: Configure
+        working-directory: nginx-1.30.2
+        run: ./configure --with-http_image_filter_module
+
+      - name: Compile
+        working-directory: nginx-1.30.2
+        run: make -j2
+
+      - name: Show build configuration
+        working-directory: nginx-1.30.2
+        run: ./objs/nginx -V
