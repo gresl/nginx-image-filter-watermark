@@ -1,6 +1,10 @@
 Nginx-image-filter-watermark
 ============================
 
+> **Hardened nginx 1.30.2 branch:** `hardening/nginx-1.30.2` contains crash fixes,
+> request-safety fixes, configuration inheritance fixes, and a production
+> regression-test plan. See [HARDENING.md](HARDENING.md).
+
 Patched `image_filter_module` for Nginx with watermark ability. Patch based on [http_image_filter_module](http://nginx.org/en/docs/http/ngx_http_image_filter_module.html)
 
 Should work properly on nginx >= 1.11.6.
