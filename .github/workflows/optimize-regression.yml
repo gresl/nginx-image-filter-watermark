@@ -69,3 +69,8 @@ jobs:
           bash tests/compare_outputs.sh \
             "$PWD/baseline/nginx-$VERSION" \
             "$PWD/candidate/nginx-$VERSION"
+
+      - name: Smoke-test local ABBA benchmark and nginx restarts
+        if: matrix.nginx == '1.30.5'
+        shell: bash
+        run: bash tests/smoke_benchmark_local.sh "$PWD"
