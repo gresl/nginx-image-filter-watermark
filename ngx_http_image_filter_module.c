@@ -1110,6 +1110,8 @@ transparent:
 #ifdef NGX_WM_PROFILE
         uint64_t profile_open_start, profile_open_end;
         uint64_t profile_decode_end, profile_apply_end;
+        uint64_t profile_copy_begin, profile_bg_end;
+        uint64_t profile_overlay_end, profile_blend_end;
 #endif
 
         watermark_applied = 0;
@@ -1359,13 +1361,25 @@ transparent:
                         }
 
                         if (can_apply) {
+#ifdef NGX_WM_PROFILE
+                            profile_copy_begin = ngx_wm_profile_now_ns();
+#endif
                             gdImageCopy(watermark_mix, dst, 0, 0, wdx, wdy,
                                         watermark->sx, watermark->sy);
+#ifdef NGX_WM_PROFILE
+                            profile_bg_end = ngx_wm_profile_now_ns();
+#endif
                             gdImageCopy(watermark_mix, watermark, 0, 0, 0, 0,
                                         watermark->sx, watermark->sy);
+#ifdef NGX_WM_PROFILE
+                            profile_overlay_end = ngx_wm_profile_now_ns();
+#endif
                             gdImageCopyMerge(dst, watermark_mix, wdx, wdy,
                                              0, 0, watermark->sx,
                                              watermark->sy, 75);
+#ifdef NGX_WM_PROFILE
+                            profile_blend_end = ngx_wm_profile_now_ns();
+#endif
                             watermark_applied = 1;
                         }
 
@@ -1388,14 +1402,26 @@ transparent:
                         ngx_log_error(NGX_LOG_NOTICE, r->connection->log, 0,
                                       "wm_profile uri=\"%V\" type=%ui filter=%ui "
                                       "open_us=%uL decode_us=%uL "
-                                      "compose_us=%uL",
+                                      "compose_us=%uL prep_us=%uL "
+                                      "copy_bg_us=%uL overlay_us=%uL "
+                                      "blend_us=%uL cleanup_us=%uL",
                                       &r->uri, ctx->type, conf->filter,
                                       (uint64_t) ((profile_open_end
                                                   - profile_open_start) / 1000),
                                       (uint64_t) ((profile_decode_end
                                                   - profile_open_end) / 1000),
                                       (uint64_t) ((profile_apply_end
-                                                  - profile_decode_end) / 1000));
+                                                  - profile_decode_end) / 1000),
+                                      (uint64_t) ((profile_copy_begin
+                                                  - profile_decode_end) / 1000),
+                                      (uint64_t) ((profile_bg_end
+                                                  - profile_copy_begin) / 1000),
+                                      (uint64_t) ((profile_overlay_end
+                                                  - profile_bg_end) / 1000),
+                                      (uint64_t) ((profile_blend_end
+                                                  - profile_overlay_end) / 1000),
+                                      (uint64_t) ((profile_apply_end
+                                                  - profile_blend_end) / 1000));
                     }
 #endif
                 }
