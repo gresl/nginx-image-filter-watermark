@@ -10,6 +10,7 @@ import grp
 import hashlib
 import math
 import os
+import re
 import signal
 import socket
 import statistics
@@ -202,6 +203,10 @@ def main():
     p.add_argument("--report", type=Path, required=True)
     p.add_argument("--port", type=int, default=18764)
     p.add_argument("--repetitions", type=int, default=35)
+    p.add_argument("--candidate-binary", type=Path,
+                   help="Optional separate instrumented candidate nginx binary")
+    p.add_argument("--profile", action="store_true",
+                   help="Read internal wm_profile timings from candidate error logs")
     args = p.parse_args()
 
     if os.geteuid() != 0:
@@ -222,12 +227,16 @@ def main():
         name: (args.workdir / name / f"nginx-{VERSION}" / "objs/nginx")
         for name in ("baseline", "candidate")
     }
+    if args.candidate_binary is not None:
+        binaries["candidate"] = args.candidate_binary
+
     for name, binary in binaries.items():
         if not binary.is_file():
             p.error(f"{name} binary missing: {binary}")
     check_port(args.port)
     opener = build_opener(ProxyHandler({}))
     results = []
+    profiles = []
     process = None
 
     with tempfile.TemporaryDirectory(prefix="wmbench-", dir="/var/tmp") as tmp:
@@ -249,7 +258,13 @@ def main():
                 (prefix / "logs").mkdir(mode=0o755)
                 nginxsrc = binaries[name].parent.parent
                 conf = prefix / "nginx.conf"
-                conf.write_text(nginx_config(prefix, nginxsrc, args.port))
+                config_text = nginx_config(prefix, nginxsrc, args.port)
+                if args.profile:
+                    config_text = config_text.replace(
+                        f"{prefix}/error.log warn;",
+                        f"{prefix}/error.log notice;",
+                    )
+                conf.write_text(config_text)
                 process = start_nginx(binaries[name], prefix, conf, args.port)
                 block = []
                 for label, route in CASES:
@@ -261,6 +276,21 @@ def main():
                 results.extend(block)
                 stop_nginx(process)
                 process = None
+
+                if args.profile and name == "candidate":
+                    for line in (prefix / "error.log").read_text().splitlines():
+                        m = re.search(
+                            r'wm_profile uri="([^"]+)" type=(\d+) '
+                            r'open_us=(\d+) decode_us=(\d+) '
+                            r'compose_us=(\d+)', line
+                        )
+                        if m:
+                            profiles.append(dict(
+                                run=seq, uri=m.group(1), type=m.group(2),
+                                open_us=int(m.group(3)),
+                                decode_us=int(m.group(4)),
+                                compose_us=int(m.group(5)),
+                            ))
                 time.sleep(.2)
         finally:
             stop_nginx(process)
@@ -278,6 +308,27 @@ def main():
         writer.writerows(results)
     print(f"Output parity: PASS ({len(hashes)} transformations)")
     print(f"Report: {args.report}")
+
+    if args.profile:
+        if not profiles:
+            raise RuntimeError(
+                "No wm_profile records observed. Build candidate nginx "
+                "with -DNGX_WM_PROFILE and enable notice log level."
+            )
+        grouped = {}
+        for record in profiles:
+            grouped.setdefault(record["uri"], []).append(record)
+        print("\n===== INTERNAL WATERMARK COST (candidate, microseconds) =====")
+        for uri, samples in sorted(grouped.items()):
+            def median(field):
+                return statistics.median(x[field] for x in samples)
+            print(
+                f"{uri} n={len(samples)} "
+                f"open={median('open_us'):.1f} "
+                f"decode={median('decode_us'):.1f} "
+                f"compose={median('compose_us'):.1f} us"
+            )
+
     print("All test nginx processes stopped; temporary image copies deleted.")
 
 
