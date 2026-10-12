@@ -1,0 +1,76 @@
+name: Check optimized image-filter output
+
+on:
+  push:
+    branches:
+      - 'optimization/**'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    name: nginx ${{ matrix.nginx }} parity
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        nginx: ['1.30.2', '1.30.5']
+
+    steps:
+      - name: Checkout source and original hardening commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate local benchmarking script syntax
+        run: python3 -m py_compile tools/benchmark_local.py
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential curl libgd-dev libpcre2-dev zlib1g-dev imagemagick
+
+      - name: Compile stable baseline and candidate against same nginx
+        shell: bash
+        env:
+          VERSION: ${{ matrix.nginx }}
+        run: |
+          set -euo pipefail
+          curl -fsSLO "https://nginx.org/download/nginx-$VERSION.tar.gz"
+          tar -xzf "nginx-$VERSION.tar.gz"
+          mkdir baseline candidate
+          cp -a "nginx-$VERSION" "baseline/nginx-$VERSION"
+          mv "nginx-$VERSION" "candidate/nginx-$VERSION"
+
+          git show ef879803c1d0405e87f7a59b9598bd3e49c2bf9b:ngx_http_image_filter_module.c \
+            > "baseline/nginx-$VERSION/src/http/modules/ngx_http_image_filter_module.c"
+          cp ngx_http_image_filter_module.c \
+            "candidate/nginx-$VERSION/src/http/modules/ngx_http_image_filter_module.c"
+
+          for variant in baseline candidate; do
+            (
+              cd "$variant/nginx-$VERSION"
+              ./configure --with-http_image_filter_module --with-debug
+              make -j2
+              ./objs/nginx -V
+            )
+          done
+
+      - name: Confirm output compatibility (real HTTP requests)
+        shell: bash
+        env:
+          VERSION: ${{ matrix.nginx }}
+        run: |
+          bash tests/compare_outputs.sh \
+            "$PWD/baseline/nginx-$VERSION" \
+            "$PWD/candidate/nginx-$VERSION"
+
+      - name: Smoke-test local ABBA benchmark and nginx restarts
+        if: matrix.nginx == '1.30.5'
+        shell: bash
+        run: bash tests/smoke_benchmark_local.sh "$PWD"
