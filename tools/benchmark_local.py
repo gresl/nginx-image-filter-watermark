@@ -280,16 +280,17 @@ def main():
                 if args.profile and name == "candidate":
                     for line in (prefix / "error.log").read_text().splitlines():
                         m = re.search(
-                            r'wm_profile uri="([^"]+)" type=(\d+) '
+                            r'wm_profile uri="([^"]+)" type=(\d+) filter=(\d+) '
                             r'open_us=(\d+) decode_us=(\d+) '
                             r'compose_us=(\d+)', line
                         )
                         if m:
                             profiles.append(dict(
                                 run=seq, uri=m.group(1), type=m.group(2),
-                                open_us=int(m.group(3)),
-                                decode_us=int(m.group(4)),
-                                compose_us=int(m.group(5)),
+                                filter=m.group(3),
+                                open_us=int(m.group(4)),
+                                decode_us=int(m.group(5)),
+                                compose_us=int(m.group(6)),
                             ))
                 time.sleep(.2)
         finally:
@@ -317,13 +318,13 @@ def main():
             )
         grouped = {}
         for record in profiles:
-            grouped.setdefault(record["uri"], []).append(record)
+            grouped.setdefault((record["uri"], record["type"], record["filter"]), []).append(record)
         print("\n===== INTERNAL WATERMARK COST (candidate, microseconds) =====")
-        for uri, samples in sorted(grouped.items()):
+        for (uri, img_type, filter_type), samples in sorted(grouped.items()):
             def median(field):
                 return statistics.median(x[field] for x in samples)
             print(
-                f"{uri} n={len(samples)} "
+                f"{uri} image_type={img_type} filter={filter_type} n={len(samples)} "
                 f"open={median('open_us'):.1f} "
                 f"decode={median('decode_us'):.1f} "
                 f"compose={median('compose_us'):.1f} us"
