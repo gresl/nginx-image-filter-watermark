@@ -1369,10 +1369,10 @@ transparent:
 
                     if (watermark_applied) {
                         ngx_log_error(NGX_LOG_NOTICE, r->connection->log, 0,
-                                      "wm_profile uri=\"%V\" type=%ui "
+                                      "wm_profile uri=\"%V\" type=%ui filter=%ui "
                                       "open_us=%uL decode_us=%uL "
                                       "compose_us=%uL",
-                                      &r->uri, ctx->type,
+                                      &r->uri, ctx->type, conf->filter,
                                       (uint64_t) ((profile_open_end
                                                   - profile_open_start) / 1000),
                                       (uint64_t) ((profile_decode_end
