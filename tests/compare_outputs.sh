@@ -123,6 +123,42 @@ EOF
         convert "$prefix/out/$(basename "$(dirname "$path")")-$(basename "$path")" null:
     done
 
+    # Diagnostic microbenchmark; not a CI pass/fail gate.
+    python3 - "$port" "$name" <<'PY'
+import math
+import statistics
+import sys
+import time
+import urllib.request
+
+port, variant = sys.argv[1:3]
+opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+for label, url in (
+    ("JPEG+WM resize", "resize/photo.jpg"),
+    ("PNG+WM resize", "resize/transparent.png"),
+    ("PNG+WM only", "watermark/transparent.png"),
+    ("GIF+WM resize", "resize/photo.gif"),
+):
+    endpoint = f"http://127.0.0.1:{port}/{url}"
+    for _ in range(5):
+        with opener.open(endpoint, timeout=15) as response:
+            response.read()
+    elapsed = []
+    for _ in range(35):
+        start = time.perf_counter_ns()
+        with opener.open(endpoint, timeout=15) as response:
+            response.read()
+        elapsed.append((time.perf_counter_ns() - start) / 1_000_000)
+    ordered = sorted(elapsed)
+    p95 = ordered[math.ceil(0.95 * len(ordered)) - 1]
+    print(
+        f"BENCH {variant} {label}: n={len(elapsed)} "
+        f"median={statistics.median(ordered):.3f}ms "
+        f"p95={p95:.3f}ms mean={statistics.mean(ordered):.3f}ms"
+    )
+PY
+
     "$source/objs/nginx" -p "$prefix/" -c "$prefix/nginx.conf" -s quit
     sleep 1
 }
