@@ -74,3 +74,28 @@ jobs:
         if: matrix.nginx == '1.30.5'
         shell: bash
         run: bash tests/smoke_benchmark_local.sh "$PWD"
+
+      - name: Verify JPEG-watermark matrix and oversize skip behavior
+        if: matrix.nginx == '1.30.5'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile tools/verify_jpeg_matrix.py
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+
+          convert -size 1080x720 gradient:'#223344-#cdb897' -quality 88 "$tmp/landscape.jpg"
+          convert -size 1080x810 plasma:fractal -quality 85 "$tmp/portraitish.jpg"
+          convert -size 300x106 xc:'#34475c' "$tmp/opaque.png"
+          convert -size 280x300 xc:none -fill 'rgba(80,20,90,0.6)' \
+            -draw 'rectangle 10,20 240,280' "$tmp/alpha.png"
+
+          sudo python3 tools/verify_jpeg_matrix.py \
+            --first-binary "$PWD/baseline/nginx-1.30.5/objs/nginx" \
+            --second-binary "$PWD/candidate/nginx-1.30.5/objs/nginx" \
+            --jpeg "$tmp/landscape.jpg" \
+            --jpeg "$tmp/portraitish.jpg" \
+            --watermark "$tmp/opaque.png" \
+            --watermark "$tmp/alpha.png" \
+            --port 18765 \
+            --report "$tmp/matrix.csv"
