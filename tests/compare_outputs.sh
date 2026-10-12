@@ -59,7 +59,8 @@ cases=(
 )
 
 run_build() {
-    local name="$1" source="$2" prefix="$work/$name"
+    local name="$1" source="$2"
+    local prefix="$work/$name"
     mkdir -p "$prefix/out"
 
     cat > "$prefix/nginx.conf" <<EOF
