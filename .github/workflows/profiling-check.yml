@@ -1,0 +1,74 @@
+name: Validate opt-in watermark profiling
+
+on:
+  push:
+    branches:
+      - 'profiling/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  instrumented:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build and image libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential curl libgd-dev libpcre2-dev zlib1g-dev imagemagick
+          getent group nginx || sudo groupadd --system nginx
+          getent passwd nginx || sudo useradd --system --gid nginx --home /nonexistent --shell /usr/sbin/nologin nginx
+
+      - name: Build stable and instrumented nginx 1.30.5
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSLO https://nginx.org/download/nginx-1.30.5.tar.gz
+          mkdir -p baseline candidate
+          tar -xzf nginx-1.30.5.tar.gz -C baseline
+          tar -xzf nginx-1.30.5.tar.gz -C candidate
+          git show ef879803c1d0405e87f7a59b9598bd3e49c2bf9b:ngx_http_image_filter_module.c \
+            > baseline/nginx-1.30.5/src/http/modules/ngx_http_image_filter_module.c
+          cp ngx_http_image_filter_module.c \
+            candidate/nginx-1.30.5/src/http/modules/ngx_http_image_filter_module.c
+
+          (
+            cd baseline/nginx-1.30.5
+            ./configure --with-http_image_filter_module
+            make -j2 > /dev/null
+          )
+          (
+            cd candidate/nginx-1.30.5
+            ./configure --with-http_image_filter_module --with-cc-opt=-DNGX_WM_PROFILE
+            make -j2 > /dev/null
+          )
+          candidate/nginx-1.30.5/objs/nginx -V 2>&1
+
+      - name: Ensure output parity with instrumentation
+        run: |
+          bash tests/compare_outputs.sh \
+            "$PWD/baseline/nginx-1.30.5" \
+            "$PWD/candidate/nginx-1.30.5"
+
+      - name: Validate real runtime profiling records and four restarts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile tools/benchmark_local.py
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          convert -size 1080x720 gradient:'#245b8f-#d3b168' -quality 88 "$tmp/photo.jpg"
+          convert -size 100x100 xc:'rgba(12,34,56,0.60)' "$tmp/watermark.png"
+          sudo python3 tools/benchmark_local.py \
+            --workdir "$PWD" \
+            --candidate-binary "$PWD/candidate/nginx-1.30.5/objs/nginx" \
+            --source-jpeg "$tmp/photo.jpg" \
+            --watermark-png "$tmp/watermark.png" \
+            --report "$tmp/result.csv" \
+            --port 18764 \
+            --repetitions 10 \
+            --profile
