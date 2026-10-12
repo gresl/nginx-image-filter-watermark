@@ -163,8 +163,11 @@ PY
     sleep 1
 }
 
+echo "Benchmark execution order: baseline / candidate / candidate / baseline"
 run_build baseline "$baseline"
 run_build candidate "$candidate"
+run_build candidate "$candidate"
+run_build baseline "$baseline"
 
 echo "Comparing ${#cases[@]} image responses, byte for byte."
 for file in "$work/baseline/out/"*; do
