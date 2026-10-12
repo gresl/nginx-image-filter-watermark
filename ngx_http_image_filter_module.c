@@ -1349,7 +1349,7 @@ transparent:
                                         watermark_mix->tpixels[copy_row],
                                         dst->tpixels[wdy + copy_row] + wdx,
                                         (size_t) watermark->sx
-                                        * sizeof(gdTrueColorPixel));
+                                        * sizeof(watermark_mix->tpixels[0][0]));
                                 }
 
                             } else {
