@@ -11,6 +11,23 @@
 
 #include <gd.h>
 
+#ifdef NGX_WM_PROFILE
+#include <time.h>
+
+/* Isolated diagnostic builds only. Not compiled into the release module. */
+static uint64_t
+ngx_wm_profile_now_ns(void)
+{
+    struct timespec now;
+
+    if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) {
+        return 0;
+    }
+
+    return (uint64_t) now.tv_sec * 1000000000ULL + (uint64_t) now.tv_nsec;
+}
+#endif
+
 
 #define NGX_HTTP_IMAGE_OFF       0
 #define NGX_HTTP_IMAGE_TEST      1
@@ -1091,8 +1108,8 @@ transparent:
         ngx_int_t    min_w, min_h, wdx, wdy;
         ngx_uint_t   can_apply, watermark_applied;
 #ifdef NGX_WM_PROFILE
-        ngx_hrtime_t profile_open_start, profile_open_end;
-        ngx_hrtime_t profile_decode_end, profile_apply_end;
+        uint64_t profile_open_start, profile_open_end;
+        uint64_t profile_decode_end, profile_apply_end;
 #endif
 
         watermark_applied = 0;
@@ -1152,11 +1169,11 @@ transparent:
                 && min_h >= conf->watermark_height_from)
             {
 #ifdef NGX_WM_PROFILE
-                profile_open_start = ngx_hrtime();
+                profile_open_start = ngx_wm_profile_now_ns();
 #endif
                 watermark_file = fopen((const char *) watermark_path, "rb");
 #ifdef NGX_WM_PROFILE
-                profile_open_end = ngx_hrtime();
+                profile_open_end = ngx_wm_profile_now_ns();
 #endif
 
                 if (watermark_file == NULL) {
@@ -1168,7 +1185,7 @@ transparent:
                 } else {
                     watermark = gdImageCreateFromPng(watermark_file);
 #ifdef NGX_WM_PROFILE
-                    profile_decode_end = ngx_hrtime();
+                    profile_decode_end = ngx_wm_profile_now_ns();
 #endif
 
                     if (watermark == NULL) {
@@ -1365,7 +1382,7 @@ transparent:
 
                     fclose(watermark_file);
 #ifdef NGX_WM_PROFILE
-                    profile_apply_end = ngx_hrtime();
+                    profile_apply_end = ngx_wm_profile_now_ns();
 
                     if (watermark_applied) {
                         ngx_log_error(NGX_LOG_NOTICE, r->connection->log, 0,
