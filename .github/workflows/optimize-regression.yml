@@ -99,3 +99,25 @@ jobs:
             --watermark "$tmp/alpha.png" \
             --port 18765 \
             --report "$tmp/matrix.csv"
+
+      - name: Validate bounded multiworker concurrency test
+        if: matrix.nginx == '1.30.5'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile tools/test_concurrency.py
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          convert -size 1080x720 plasma:fractal -quality 85 "$tmp/photo.jpg"
+          convert -size 300x150 xc:none -fill 'rgba(10,50,90,0.5)' \
+            -draw 'rectangle 10,10 280,140' "$tmp/watermark.png"
+          sudo python3 tools/test_concurrency.py \
+            --first-binary "$PWD/baseline/nginx-1.30.5/objs/nginx" \
+            --second-binary "$PWD/candidate/nginx-1.30.5/objs/nginx" \
+            --source-jpeg "$tmp/photo.jpg" \
+            --watermark-png "$tmp/watermark.png" \
+            --port 18766 \
+            --workers 4 \
+            --concurrency 8 \
+            --requests-per-case 20 \
+            --report "$tmp/concurrency.csv"
