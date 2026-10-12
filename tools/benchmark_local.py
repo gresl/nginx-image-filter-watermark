@@ -282,7 +282,9 @@ def main():
                         m = re.search(
                             r'wm_profile uri="([^"]+)" type=(\d+) filter=(\d+) '
                             r'open_us=(\d+) decode_us=(\d+) '
-                            r'compose_us=(\d+)', line
+                            r'compose_us=(\d+) prep_us=(\d+) '
+                            r'copy_bg_us=(\d+) overlay_us=(\d+) '
+                            r'blend_us=(\d+) cleanup_us=(\d+)', line
                         )
                         if m:
                             profiles.append(dict(
@@ -291,6 +293,11 @@ def main():
                                 open_us=int(m.group(4)),
                                 decode_us=int(m.group(5)),
                                 compose_us=int(m.group(6)),
+                                prep_us=int(m.group(7)),
+                                copy_bg_us=int(m.group(8)),
+                                overlay_us=int(m.group(9)),
+                                blend_us=int(m.group(10)),
+                                cleanup_us=int(m.group(11)),
                             ))
                 time.sleep(.2)
         finally:
@@ -327,7 +334,12 @@ def main():
                 f"{uri} image_type={img_type} filter={filter_type} n={len(samples)} "
                 f"open={median('open_us'):.1f} "
                 f"decode={median('decode_us'):.1f} "
-                f"compose={median('compose_us'):.1f} us"
+                f"compose={median('compose_us'):.1f} "
+                f"prep={median('prep_us'):.1f} "
+                f"copy_bg={median('copy_bg_us'):.1f} "
+                f"overlay={median('overlay_us'):.1f} "
+                f"blend={median('blend_us'):.1f} "
+                f"cleanup={median('cleanup_us'):.1f} us"
             )
 
     print("All test nginx processes stopped; temporary image copies deleted.")
