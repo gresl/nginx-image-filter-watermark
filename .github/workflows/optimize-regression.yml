@@ -26,6 +26,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Validate local benchmarking script syntax
+        run: python3 -m py_compile tools/benchmark_local.py
+
       - name: Install dependencies
         run: |
           sudo apt-get update
