@@ -202,6 +202,10 @@ def main():
     p.add_argument("--report", type=Path, required=True)
     p.add_argument("--port", type=int, default=18764)
     p.add_argument("--repetitions", type=int, default=35)
+    p.add_argument("--baseline-binary", type=Path,
+                   help="Override the baseline binary for incremental A/B tests")
+    p.add_argument("--candidate-binary", type=Path,
+                   help="Override the candidate binary for incremental A/B tests")
     args = p.parse_args()
 
     if os.geteuid() != 0:
@@ -222,6 +226,11 @@ def main():
         name: (args.workdir / name / f"nginx-{VERSION}" / "objs/nginx")
         for name in ("baseline", "candidate")
     }
+    if args.baseline_binary is not None:
+        binaries["baseline"] = args.baseline_binary
+    if args.candidate_binary is not None:
+        binaries["candidate"] = args.candidate_binary
+
     for name, binary in binaries.items():
         if not binary.is_file():
             p.error(f"{name} binary missing: {binary}")

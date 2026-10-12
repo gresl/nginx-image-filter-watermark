@@ -1088,7 +1088,7 @@ transparent:
         u_char      *watermark_path, *watermark_position;
         ngx_str_t    watermark_value, position_value;
         gdImagePtr   watermark, watermark_mix, white;
-        ngx_int_t    min_w, min_h, wdx, wdy;
+        ngx_int_t    min_w, min_h, wdx, wdy, copy_row;
         ngx_uint_t   can_apply, watermark_applied;
 
         watermark_applied = 0;
@@ -1329,8 +1329,34 @@ transparent:
                         }
 
                         if (can_apply) {
-                            gdImageCopy(watermark_mix, dst, 0, 0, wdx, wdy,
-                                        watermark->sx, watermark->sy);
+                            /*
+                             * JPEG destination pixels are opaque truecolor.
+                             * Preserve the same background pixels without
+                             * GD's per-pixel copy dispatch.  Keep the GD
+                             * path for palette or transparent destinations.
+                             * watermark_mix is a distinct GD allocation and
+                             * its rows cannot overlap the source pixels.
+                             */
+                            if (ctx->type == NGX_HTTP_IMAGE_JPEG
+                                && dst->trueColor
+                                && watermark_mix->trueColor)
+                            {
+                                for (copy_row = 0;
+                                     copy_row < watermark->sy;
+                                     copy_row++)
+                                {
+                                    ngx_memcpy(
+                                        watermark_mix->tpixels[copy_row],
+                                        dst->tpixels[wdy + copy_row] + wdx,
+                                        (size_t) watermark->sx
+                                        * sizeof(watermark_mix->tpixels[0][0]));
+                                }
+
+                            } else {
+                                gdImageCopy(watermark_mix, dst, 0, 0, wdx, wdy,
+                                            watermark->sx, watermark->sy);
+                            }
+
                             gdImageCopy(watermark_mix, watermark, 0, 0, 0, 0,
                                         watermark->sx, watermark->sy);
                             gdImageCopyMerge(dst, watermark_mix, wdx, wdy,
