@@ -95,8 +95,14 @@ def convert(src, dst):
 
 
 def check_port(port):
-    with socket.socket() as sock:
+    # The previous nginx listener may have closed already while its HTTP
+    # connections remain in TCP TIME_WAIT.  A plain bind() incorrectly
+    # reports EADDRINUSE in that case.  nginx itself uses SO_REUSEADDR.
+    # A genuinely active listener still prevents the new listen().
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.bind(("127.0.0.1", port))
+        sock.listen(1)
 
 
 def start_nginx(binary, prefix, config, port):
@@ -238,6 +244,9 @@ def main():
                 check_port(args.port)
                 prefix = fixtures / f"run-{seq}-{name}"
                 prefix.mkdir(mode=0o755)
+                # nginx opens its default error log before processing
+                # error_log in the supplied configuration during -t.
+                (prefix / "logs").mkdir(mode=0o755)
                 nginxsrc = binaries[name].parent.parent
                 conf = prefix / "nginx.conf"
                 conf.write_text(nginx_config(prefix, nginxsrc, args.port))
