@@ -1090,6 +1090,10 @@ transparent:
         gdImagePtr   watermark, watermark_mix, white;
         ngx_int_t    min_w, min_h, wdx, wdy;
         ngx_uint_t   can_apply, watermark_applied;
+#ifdef NGX_WM_PROFILE
+        ngx_hrtime_t profile_open_start, profile_open_end;
+        ngx_hrtime_t profile_decode_end, profile_apply_end;
+#endif
 
         watermark_applied = 0;
 
@@ -1147,7 +1151,13 @@ transparent:
             if (min_w >= conf->watermark_width_from
                 && min_h >= conf->watermark_height_from)
             {
+#ifdef NGX_WM_PROFILE
+                profile_open_start = ngx_hrtime();
+#endif
                 watermark_file = fopen((const char *) watermark_path, "rb");
+#ifdef NGX_WM_PROFILE
+                profile_open_end = ngx_hrtime();
+#endif
 
                 if (watermark_file == NULL) {
                     ngx_log_error(NGX_LOG_WARN, r->connection->log,
@@ -1157,6 +1167,9 @@ transparent:
 
                 } else {
                     watermark = gdImageCreateFromPng(watermark_file);
+#ifdef NGX_WM_PROFILE
+                    profile_decode_end = ngx_hrtime();
+#endif
 
                     if (watermark == NULL) {
                         ngx_log_error(NGX_LOG_WARN, r->connection->log, 0,
@@ -1351,6 +1364,23 @@ transparent:
                     }
 
                     fclose(watermark_file);
+#ifdef NGX_WM_PROFILE
+                    profile_apply_end = ngx_hrtime();
+
+                    if (watermark_applied) {
+                        ngx_log_error(NGX_LOG_NOTICE, r->connection->log, 0,
+                                      "wm_profile uri=\"%V\" type=%ui "
+                                      "open_us=%uL decode_us=%uL "
+                                      "compose_us=%uL",
+                                      &r->uri, ctx->type,
+                                      (uint64_t) ((profile_open_end
+                                                  - profile_open_start) / 1000),
+                                      (uint64_t) ((profile_decode_end
+                                                  - profile_open_end) / 1000),
+                                      (uint64_t) ((profile_apply_end
+                                                  - profile_decode_end) / 1000));
+                    }
+#endif
                 }
             }
 
