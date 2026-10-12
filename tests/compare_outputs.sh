@@ -35,6 +35,9 @@ convert -size 640x400 xc:none \
     -fill 'rgba(0,255,0,0.35)' -draw 'circle 300,180 400,180' \
     "$files/transparent.png"
 convert "$files/opaque.png" "$files/photo.gif"
+# Exercise JPEG fast path against noisier content and edge-clamped positioning.
+convert -size 811x533 plasma:fractal -quality 85 "$files/noisy.jpg"
+convert -size 111x79 gradient:'#173c60-#dadada' -quality 85 "$files/small.jpg"
 convert -size 95x75 xc:none \
     -fill 'rgba(20,20,20,0.65)' -draw 'roundrectangle 0,0 94,74 10,10' \
     -fill white -pointsize 12 -draw 'text 12,42 WM' \
@@ -47,10 +50,14 @@ convert -size 95x75 xc:none \
 
 cases=(
     'watermark/photo.jpg'
+    'watermark/noisy.jpg'
+    'watermark/small.jpg'
     'watermark/opaque.png'
     'watermark/transparent.png'
     'watermark/photo.gif'
     'resize/photo.jpg'
+    'resize/noisy.jpg'
+    'resize/small.jpg'
     'resize/opaque.png'
     'resize/transparent.png'
     'resize/photo.gif'
