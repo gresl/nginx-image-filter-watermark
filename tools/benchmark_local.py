@@ -6,6 +6,7 @@ to a private temporary directory and deleted after the test.
 """
 import argparse
 import csv
+import grp
 import hashlib
 import math
 import os
@@ -80,7 +81,8 @@ http {{
 def copy_image(src, dst):
     import shutil
     shutil.copyfile(src, dst)
-    os.chmod(dst, 0o644)
+    os.chown(dst, 0, grp.getgrnam('nginx').gr_gid)
+    os.chmod(dst, 0o640)
 
 
 def convert(src, dst):
@@ -88,7 +90,8 @@ def convert(src, dst):
         ["convert", str(src), str(dst)],
         check=True, stdout=subprocess.DEVNULL, timeout=45,
     )
-    os.chmod(dst, 0o644)
+    os.chown(dst, 0, grp.getgrnam('nginx').gr_gid)
+    os.chmod(dst, 0o640)
 
 
 def check_port(port):
@@ -195,6 +198,8 @@ def main():
     p.add_argument("--repetitions", type=int, default=35)
     args = p.parse_args()
 
+    if os.geteuid() != 0:
+        p.error('run as root: isolated nginx master and nginx group permissions')
     if not (1024 <= args.port <= 65535):
         p.error("port must be between 1024 and 65535")
     if not (10 <= args.repetitions <= 100):
@@ -221,7 +226,8 @@ def main():
 
     with tempfile.TemporaryDirectory(prefix="wmbench-", dir="/var/tmp") as tmp:
         fixtures = Path(tmp)
-        os.chmod(fixtures, 0o755)
+        os.chown(fixtures, 0, grp.getgrnam('nginx').gr_gid)
+        os.chmod(fixtures, 0o750)
         copy_image(args.source_jpeg, fixtures / "photo.jpg")
         copy_image(args.watermark_png, fixtures / "watermark.png")
         convert(fixtures / "photo.jpg", fixtures / "photo.png")
