@@ -1087,7 +1087,7 @@ transparent:
         FILE        *watermark_file;
         u_char      *watermark_path, *watermark_position;
         ngx_str_t    watermark_value, position_value;
-        gdImagePtr   watermark, watermark_mix, white, white_mix;
+        gdImagePtr   watermark, watermark_mix, white;
         ngx_int_t    min_w, min_h, wdx, wdy;
         ngx_uint_t   can_apply, watermark_applied;
 
@@ -1167,7 +1167,6 @@ transparent:
                         can_apply = 1;
                         watermark_mix = NULL;
                         white = NULL;
-                        white_mix = NULL;
 
                         if (watermark->sx <= 0 || watermark->sy <= 0
                             || watermark->sx > dst->sx
@@ -1304,29 +1303,26 @@ transparent:
                             && (ctx->type == NGX_HTTP_IMAGE_GIF
                                 || ctx->type == NGX_HTTP_IMAGE_PNG))
                         {
+                            /*
+                             * Composite PNG/GIF pixels directly onto white.
+                             * This replaces the extra full-sized intermediate
+                             * image and redundant 100% merge.
+                             */
                             white = gdImageCreateTrueColor(dst->sx, dst->sy);
-                            white_mix = gdImageCreateTrueColor(dst->sx,
-                                                               dst->sy);
 
-                            if (white == NULL || white_mix == NULL) {
+                            if (white == NULL) {
                                 ngx_log_error(NGX_LOG_ERR,
                                               r->connection->log, 0,
                                               "failed to allocate watermark "
-                                              "transparency buffers");
+                                              "transparency buffer");
                                 can_apply = 0;
 
                             } else {
                                 gdImageFill(white, 0, 0,
                                     gdImageColorAllocate(white, 255, 255, 255));
-                                gdImageCopy(white_mix, white, 0, 0, 0, 0,
-                                            white_mix->sx, white_mix->sy);
-                                gdImageCopy(white_mix, dst, 0, 0, 0, 0,
-                                            white_mix->sx, white_mix->sy);
-                                gdImageCopyMerge(white, white_mix, 0, 0, 0, 0,
-                                                 white->sx, white->sy, 100);
+                                gdImageCopy(white, dst, 0, 0, 0, 0,
+                                            white->sx, white->sy);
                                 gdImageDestroy(dst);
-                                gdImageDestroy(white_mix);
-                                white_mix = NULL;
                                 dst = white;
                                 white = NULL;
                             }
@@ -1345,10 +1341,6 @@ transparent:
 
                         if (white != NULL) {
                             gdImageDestroy(white);
-                        }
-
-                        if (white_mix != NULL) {
-                            gdImageDestroy(white_mix);
                         }
 
                         if (watermark_mix != NULL) {
